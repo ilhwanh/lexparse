@@ -2,7 +2,7 @@
   "name": "lexparse",
   "version": "0.1.0",
   "description": "A runtime lexer and parser which conforms the type system.",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "start": "ts-node --ignore false src/index.ts",
     "build": "webpack"
