@@ -1,3 +1,7 @@
 node_modules/
 src/
 webpack.*.js
+package.json.old
+*.sh
+tsconfig.json
+.idea/

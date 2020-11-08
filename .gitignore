@@ -117,3 +117,5 @@ dist
 
 # Typescript d.ts
 build
+lib
+lib-esm

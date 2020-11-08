@@ -1,13 +1,13 @@
 import * as Either from "fp-ts/Either";
-import {assertNever} from "../utils";
+import {assertNever, tail} from "../utils";
 import {StateAction} from "./pushdown";
 import * as Arr from "fp-ts/Array";
-import {pipe} from "fp-ts/function";
 import {ImmutableMap} from "../utils/immutable";
 
 type TokenizerError = Error;
 
 export interface BinToken {
+  uid: number;
   length: number;
   contents: string;
 }
@@ -33,13 +33,23 @@ export class RuleTokenizer<T extends BinToken, Fold, State = string, U extends (
       return ` ${rawWhole.replace(/\s/g, " ")}\n ${" ".repeat(index)}^`
     }
 
-    function tokenizeTail(fold: Fold, stateStack: State[], raw: string, index: number, rules: RuleTokenizerRule<Fold, State, T>[], ruleWhole: RuleTokenizerRule<Fold, State, T>[]): Either.Either<TokenizerError, U[]> {
+    type TokenizerTailState = {
+      fold: Fold;
+      stateStack: State[];
+      raw: string;
+      index: number;
+      rules: RuleTokenizerRule<Fold, State, T>[];
+      ruleWhole: RuleTokenizerRule<Fold, State, T>[];
+      chained: FIFOArray<U>;
+    };
+
+    function tokenizeTail({ fold, stateStack, raw, index, rules, ruleWhole, chained }: TokenizerTailState): Either.Either<Either.Either<TokenizerError, U[]>, TokenizerTailState> {
       if (raw.length === 0) {
-        return Either.right([])
+        return Either.left(Either.right(chained))
       }
 
       if (rules.length === 0) {
-        return Either.left(new Error(`syntax error at ${index} stuck at state ${JSON.stringify(stateStack)}\n${textPointer(rawWhole, index)}`))
+        return Either.left(Either.left(new Error(`syntax error at ${index} stuck at state ${JSON.stringify(stateStack)}\n${textPointer(rawWhole, index)}`)))
       }
 
       const match = rules[0](fold, stateStack[0], raw);
@@ -53,7 +63,7 @@ export class RuleTokenizer<T extends BinToken, Fold, State = string, U extends (
         } as U;
         const stateAction = newState;
         if (!raw.startsWith(token.contents)) {
-          return Either.left(new Error("a rule must match from the start"))
+          return Either.left(Either.left(new Error("a rule must match from the start")))
         }
 
         const newStateStack =
@@ -63,36 +73,68 @@ export class RuleTokenizer<T extends BinToken, Fold, State = string, U extends (
           assertNever(stateAction);
 
         if (newStateStack.length === 0) {
-          return Either.left(new Error(`syntax error at ${index} run out of stack\n${textPointer(rawWhole, index)}`))
+          return Either.left(Either.left(new Error(`syntax error at ${index} run out of stack\n${textPointer(rawWhole, index)}`)))
         }
 
-        const tokensTail = tokenizeTail(emptyFold, newStateStack, raw.slice(token.length), index + token.length, ruleWhole, ruleWhole);
-        return Either.chain<Error, U[], U[]>((tokens: U[]) => Either.right([token, ...tokens]))(tokensTail)
+        return Either.right({
+          fold: emptyFold,
+          stateStack: newStateStack,
+          raw: raw.slice(token.length),
+          index: index + token.length,
+          rules: ruleWhole,
+          ruleWhole: ruleWhole,
+          chained: [...chained, token],
+        })
       } else {
         const newFold = match.left;
-        return tokenizeTail(newFold, stateStack, raw, index, rules.slice(1), ruleWhole)
+        return tokenizeTail({
+          fold: newFold,
+          stateStack: stateStack,
+          raw: raw,
+          index: index,
+          rules: rules.slice(1),
+          ruleWhole: ruleWhole,
+          chained: chained,
+        })
       }
     }
 
-    return tokenizeTail(emptyFold, [this.initialState], rawWhole, 0, this.rules, this.rules)
+    return tail({
+      fold: emptyFold,
+      stateStack: [this.initialState],
+      raw: rawWhole,
+      index: 0,
+      rules: this.rules,
+      ruleWhole: this.rules,
+      chained: [],
+    }, tokenizeTail)
   }
 }
 
 export interface FIFOArray<T> extends Array<T> {}
 
+let regExpTokenizerRuleUid = 0;
+
 export interface RegExpTokenizerRule<State> {
-  uid: string;
+  uid: number;
   oldStates?: State[];
   stateAction?: StateAction<State>;
   pattern: RegExp | string;
   ignore?: string[];
 }
 
-export interface RegExpTokenizerFold {
-  cache: ImmutableMap<string, number>;
+export function regExpTokenizerRule<State>(contents: Omit<RegExpTokenizerRule<State>, "uid">): RegExpTokenizerRule<State> {
+  return {
+    ...contents,
+    uid: regExpTokenizerRuleUid++,
+  }
 }
 
-export type RegExpTokenizerToken = BinToken & { uid: string }
+export interface RegExpTokenizerFold {
+  cache: ImmutableMap<number, number>;
+}
+
+export type RegExpTokenizerToken = BinToken & { uid: number }
 
 export class RegExpTokenizer<State> extends RuleTokenizer<BinToken, RegExpTokenizerFold, State> {
   constructor(public regexpRules: FIFOArray<RegExpTokenizerRule<State>>, protected initialState: State, protected groupName: string = "contents") {
@@ -111,10 +153,10 @@ export class RegExpTokenizer<State> extends RuleTokenizer<BinToken, RegExpTokeni
           }
 
           const breakAt =
-            Arr.reduce<[string, number], number | null>(
+            Arr.reduce<[number, number], number | null>(
               null,
               (breakAt, [name, index]) => (name in (regexpRule.ignore || [])) ? breakAt : breakAt === null ? index : Math.min(index, breakAt)
-            )(fold.cache.entries());
+            )(fold.cache.entries() as [number, number][]);
 
           const match = regexpRule.patternCompiled.exec(breakAt === null ? text : text.slice(0, breakAt));
           const contents = match !== null ? match[groupName] || match[0] : null;
