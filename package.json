@@ -1,6 +1,6 @@
 {
   "name": "lexparse",
-  "version": "0.1.26",
+  "version": "0.1.29",
   "description": "A runtime lexer and parser which conforms the type system.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

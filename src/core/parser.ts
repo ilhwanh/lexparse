@@ -141,13 +141,20 @@ export function oneOrMore<Variant>(element: MaybeLazy<Declaration<Variant>>): De
 
 export function optional<Variant>(element: MaybeLazy<Declaration<Variant>>): Declaration<Variant> {
   return mapped(
-    (ast) => Array.isArray(ast) ? [ast[0]] : [],
+    (ast) => Array.isArray(ast) ? [ast[0]] : [undefined],
     {
       uid: declarationUid++,
       type: "array",
       element: element,
       atMost: 1,
     },
+  )
+}
+
+export function delimitedArray<Variant>(element: MaybeLazy<Declaration<Variant>>, delimiter: MaybeLazy<Declaration<Variant>>): Declaration<Variant> {
+  return mapped(
+    (ast) => typeof ast === "undefined" ? [[]] : [[ast[0], ...ast[1].map(subseq => subseq[1])]],
+    optional(sequence(element, zeroOrMore(sequence(delimiter, element))))
   )
 }
 
@@ -211,7 +218,7 @@ export function mapped<Variant>(mapper: (x: Ast<Variant>) => Ast<Variant>[], sub
 export function slice<Variant>(from: number, to: number | undefined, subDec: MaybeLazy<Declaration<Variant>>): Declaration<Variant> {
   const indexHelper = (arr: any[]) => (index: number) => typeof index === "number" ? (index >= 0 ? index : arr.length + index) : arr.length;
   return mapped(
-    (ast) => Array.isArray(ast) ? ast.slice(indexHelper(ast)(from), indexHelper(ast)(to)) : [],
+    (ast) => Array.isArray(ast) ? [ast.slice(indexHelper(ast)(from), indexHelper(ast)(to))] : [],
     subDec,
   )
 }

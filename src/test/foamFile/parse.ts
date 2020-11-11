@@ -33,8 +33,8 @@ export const buildParser = once1("foamFile/buildParse", (lex: ReturnType<typeof 
           literalDec(lex.semicolon),
         ),
       ),
-      slice(
-        0, -1,
+      pick(
+        0,
         sequence(
           oneOrMore(() => dataLiteral),
           literalDec(lex.semicolon),
@@ -50,8 +50,8 @@ export const buildParser = once1("foamFile/buildParse", (lex: ReturnType<typeof 
 
   const dictionary = objectDec<AstVariant>(
     "dictionary",
-    ["fields", slice(
-      1, -1,
+    ["fields", pick(
+      1,
       sequence(
         literalDec(lex.parenthesis, /^{$/),
         zeroOrMore(() => declaration),
@@ -62,8 +62,8 @@ export const buildParser = once1("foamFile/buildParse", (lex: ReturnType<typeof 
 
   const dimension = objectDec<AstVariant>(
     "dimension",
-    ["dimension", slice(
-      1, -1,
+    ["dimension", pick(
+      1,
       sequence(
         literalDec(lex.parenthesis, /^\[$/),
         oneOrMore(() => dataLiteral),
@@ -74,8 +74,8 @@ export const buildParser = once1("foamFile/buildParse", (lex: ReturnType<typeof 
 
   const vector = objectDec<AstVariant>(
     "vector",
-    ["values", slice(
-      1, -1,
+    ["values", pick(
+      1,
       sequence(
         literalDec(lex.parenthesis, /^\($/),
         zeroOrMore(() => dataLiteral),
